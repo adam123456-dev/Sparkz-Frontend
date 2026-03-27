@@ -26,6 +26,7 @@ export type ChecklistStatus = "fully_met" | "partially_met" | "missing";
 
 export type ChecklistItem = {
   id: string;
+  itemKey: string;
   requirement: string;
   status: ChecklistStatus;
   evidence: string | null;

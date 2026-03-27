@@ -92,7 +92,7 @@ export function ResultsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
+                    <tr key={item.itemKey} className="hover:bg-slate-50">
                       <td className="px-6 py-4 align-top">
                         <span className="rounded bg-slate-100 px-2 py-1 font-mono text-xs font-bold">{item.id}</span>
                       </td>
@@ -103,9 +103,9 @@ export function ResultsPage() {
                         <StatusBadge status={item.status} />
                       </td>
                       <td className="px-6 py-4 align-top">
-                        {item.explanation ? (
+                        {item.status === "missing" || item.explanation ? (
                           <p className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs font-medium leading-relaxed text-slate-700">
-                            {item.explanation}
+                            {item.status === "missing" ? "No evidence found." : item.explanation}
                           </p>
                         ) : (
                           <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-600">
