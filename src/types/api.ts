@@ -24,12 +24,22 @@ export type AnalysisStatusResponse = {
 
 export type ChecklistStatus = "fully_met" | "partially_met" | "missing";
 
+export type EvidenceBlock = {
+  chunkId: string;
+  pageNumber: number;
+  similarity: number;
+  text: string;
+};
+
 export type ChecklistItem = {
   id: string;
   itemKey: string;
   requirement: string;
   status: ChecklistStatus;
+  /** Best rule–chunk cosine (0–1); used for status when LLM is off. */
+  bestSimilarity?: number | null;
   evidence: string | null;
+  evidenceBlocks?: EvidenceBlock[] | null;
   explanation?: string | null;
 };
 

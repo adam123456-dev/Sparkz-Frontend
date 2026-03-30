@@ -26,10 +26,14 @@ export function ResultsPage() {
       const filterMatch = filter === "all" || item.status === filter;
       if (!filterMatch) return false;
       if (!keyword) return true;
+      const evidenceHaystack = (item.evidenceBlocks ?? [])
+        .map((b) => `${b.text} page${b.pageNumber}`)
+        .join(" ");
       return (
         item.id.toLowerCase().includes(keyword) ||
         item.requirement.toLowerCase().includes(keyword) ||
-        (item.explanation ?? "").toLowerCase().includes(keyword)
+        (item.explanation ?? "").toLowerCase().includes(keyword) ||
+        evidenceHaystack.toLowerCase().includes(keyword)
       );
     });
   }, [data, filter, search]);
@@ -80,12 +84,14 @@ export function ResultsPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left">
+              <table className="w-full min-w-[1000px] text-left">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="px-6 py-4">ID</th>
                     <th className="px-6 py-4">Requirement</th>
                     <th className="px-6 py-4 text-center">Status</th>
+                    <th className="px-6 py-4 text-right">Best match</th>
+                    <th className="px-6 py-4">Evidence</th>
                     <th className="px-6 py-4">Reason</th>
                     <th className="px-6 py-4" />
                   </tr>
@@ -102,10 +108,47 @@ export function ResultsPage() {
                       <td className="px-6 py-4 text-center align-top">
                         <StatusBadge status={item.status} />
                       </td>
+                      <td className="px-6 py-4 align-top text-right text-xs font-mono text-slate-600">
+                        {item.bestSimilarity != null && item.bestSimilarity > 0 ? (
+                          <span title="Cosine similarity vs checklist rule embedding">
+                            {(item.bestSimilarity * 100).toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 align-top">
-                        {item.status === "missing" || item.explanation ? (
+                        {item.status === "missing" ? (
+                          <p className="text-xs font-medium text-slate-500">No evidence found.</p>
+                        ) : item.evidenceBlocks && item.evidenceBlocks.length > 0 ? (
+                          <ul className="space-y-2">
+                            {item.evidenceBlocks.map((block) => (
+                              <li
+                                key={block.chunkId}
+                                className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs leading-relaxed text-slate-800"
+                              >
+                                <span className="font-semibold text-slate-600">
+                                  Page {block.pageNumber}
+                                  <span className="ml-2 font-mono text-slate-500">
+                                    {(block.similarity * 100).toFixed(1)}% match
+                                  </span>
+                                </span>
+                                <p className="mt-1 whitespace-pre-wrap">{block.text}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : item.evidence ? (
+                          <p className="text-xs leading-relaxed text-slate-700">{item.evidence}</p>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 align-top">
+                        {item.status === "missing" ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : item.explanation ? (
                           <p className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs font-medium leading-relaxed text-slate-700">
-                            {item.status === "missing" ? "No evidence found." : item.explanation}
+                            {item.explanation}
                           </p>
                         ) : (
                           <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-600">
