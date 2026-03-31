@@ -24,6 +24,14 @@ export type AnalysisStatusResponse = {
 
 export type ChecklistStatus = "fully_met" | "partially_met" | "missing";
 
+export type CheckResult = {
+  checkId: string;
+  label: string;
+  status: ChecklistStatus;
+  reason?: string | null;
+  confidence?: number | null;
+};
+
 export type EvidenceBlock = {
   chunkId: string;
   pageNumber: number;
@@ -38,9 +46,13 @@ export type ChecklistItem = {
   status: ChecklistStatus;
   /** Best rule–chunk cosine (0–1); used for status when LLM is off. */
   bestSimilarity?: number | null;
+  coverage?: number | null;
+  checkResults?: CheckResult[] | null;
   evidence: string | null;
   evidenceBlocks?: EvidenceBlock[] | null;
   explanation?: string | null;
+  /** When true, low confidence or missing evidence — human review recommended. */
+  needsReview?: boolean;
 };
 
 export type AnalysisResultResponse = {
