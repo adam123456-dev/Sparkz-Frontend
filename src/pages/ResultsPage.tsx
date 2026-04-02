@@ -3,10 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { StatusBadge } from "../components/StatusBadge";
 import { getAnalysisResult } from "../services/api";
-import type { AnalysisResultResponse, ChecklistItem, ChecklistStatus } from "../types/api";
+import type { AnalysisResultResponse, ChecklistItem, ChecklistStatus, EvidenceBlock } from "../types/api";
 import { useAsync } from "../hooks/useAsync";
 
 type FilterValue = "all" | "review" | ChecklistStatus;
+
+const EVIDENCE_PREVIEW_CHARS = 140;
 
 export function ResultsPage() {
   const { analysisId } = useParams<{ analysisId: string }>();
@@ -56,8 +58,8 @@ export function ResultsPage() {
       {data && (
         <div className="space-y-6">
           <div className="flex flex-col gap-2">
-            <h2 className="text-3xl font-extrabold">{data.companyName}</h2>
-            <p className="text-slate-500">{data.framework} disclosure checklist results</p>
+            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">{data.companyName}</h2>
+            <p className="text-sm text-slate-500 sm:text-base">{data.framework} disclosure checklist results</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -68,8 +70,8 @@ export function ResultsPage() {
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1">
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/80 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-4">
+              <div className="-mx-1 flex gap-1 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:rounded-lg sm:border sm:border-slate-200 sm:bg-white sm:p-1">
                 <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label="All" />
                 <FilterButton active={filter === "review"} onClick={() => setFilter("review")} label="Review" />
                 <FilterButton active={filter === "missing"} onClick={() => setFilter("missing")} label="Missing" />
@@ -82,36 +84,79 @@ export function ResultsPage() {
               </div>
 
               <input
-                className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-primary focus:ring-2"
+                className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-primary focus:ring-2 sm:max-w-sm"
                 placeholder="Search ID, requirement, reason..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] text-left">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <p className="hidden border-b border-slate-100 bg-slate-50/50 px-4 py-2 text-xs leading-relaxed text-slate-500 lg:block">
+              <span className="font-semibold text-slate-600">Best retrieval</span> is cosine similarity between the rule
+              embedding and the strongest retrieved chunk. Each evidence card shows that chunk&apos;s own score (same
+              scale, 0–100%).
+            </p>
+            <details className="group border-b border-slate-100 bg-slate-50/50 lg:hidden">
+              <summary className="cursor-pointer list-none px-4 py-2.5 text-xs text-slate-600 [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center justify-between gap-2 font-semibold">
+                  What do scores mean?
+                  <span className="material-symbols-outlined text-base text-slate-400 transition group-open:rotate-180">
+                    expand_more
+                  </span>
+                </span>
+              </summary>
+              <p className="border-t border-slate-100 px-4 pb-3 pt-2 text-xs leading-relaxed text-slate-500">
+                <span className="font-semibold text-slate-600">Best retrieval</span> is cosine similarity between the rule
+                embedding and the strongest retrieved chunk. Each evidence card shows that chunk&apos;s own score (same
+                scale, 0–100%).
+              </p>
+            </details>
+
+            {/* Mobile / tablet: stacked cards */}
+            <div className="divide-y divide-slate-100 lg:hidden">
+              {filteredItems.map((item) => (
+                <ResultItemMobileCard key={item.itemKey} item={item} />
+              ))}
+            </div>
+
+            {/* Desktop: wide table */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full table-fixed border-collapse text-left text-sm">
+                <colgroup>
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "30%" }} />
+                  <col style={{ width: "23%" }} />
+                </colgroup>
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-6 py-4">ID</th>
-                    <th className="px-6 py-4">Requirement</th>
-                    <th className="px-6 py-4 text-center">Status</th>
-                    <th className="px-6 py-4 text-right">Best match</th>
-                    <th className="px-6 py-4">Evidence</th>
-                    <th className="px-6 py-4">Reason</th>
-                    <th className="px-6 py-4" />
+                    <th className="px-4 py-3 align-bottom">ID</th>
+                    <th className="px-4 py-3 align-bottom">Requirement</th>
+                    <th className="px-4 py-3 text-center align-bottom">Status</th>
+                    <th className="px-4 py-3 align-bottom">
+                      <span className="block leading-tight">Best</span>
+                      <span className="block font-normal normal-case tracking-normal text-slate-400">retrieval</span>
+                    </th>
+                    <th className="px-4 py-3 align-bottom">Evidence</th>
+                    <th className="px-4 py-3 align-bottom">Summary</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredItems.map((item) => (
-                    <tr key={item.itemKey} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 align-top">
-                        <span className="rounded bg-slate-100 px-2 py-1 font-mono text-xs font-bold">{item.id}</span>
+                    <tr key={item.itemKey} className="align-top transition-colors hover:bg-slate-50/80">
+                      <td className="px-4 py-3">
+                        <span className="inline-block max-w-full truncate rounded-md bg-slate-100 px-2 py-1 font-mono text-[11px] font-bold text-slate-700" title={item.id}>
+                          {item.id}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 align-top text-sm font-medium leading-relaxed text-slate-800">
-                        {item.requirement}
+                      <td className="px-4 py-3">
+                        <p className="max-h-[7.5rem] overflow-y-auto text-[13px] font-medium leading-snug text-slate-800">
+                          {item.requirement}
+                        </p>
                       </td>
-                      <td className="px-6 py-4 text-center align-top">
+                      <td className="px-4 py-3 text-center">
                         <div className="flex flex-col items-center gap-1.5">
                           <StatusBadge status={item.status} />
                           {item.needsReview ? (
@@ -124,49 +169,14 @@ export function ResultsPage() {
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-6 py-4 align-top text-right text-xs font-mono text-slate-600">
-                        {item.bestSimilarity != null && item.bestSimilarity > 0 ? (
-                          <span title="Cosine similarity vs checklist rule embedding">
-                            {(item.bestSimilarity * 100).toFixed(1)}%
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
+                      <td className="px-4 py-3">
+                        <BestMatchColumn item={item} />
                       </td>
-                      <td className="px-6 py-4 align-top">
-                        {item.status === "missing" ? (
-                          <p className="text-xs font-medium text-slate-500">No evidence found.</p>
-                        ) : item.evidenceBlocks && item.evidenceBlocks.length > 0 ? (
-                          <ul className="space-y-1.5">
-                            {item.evidenceBlocks.map((block) => (
-                              <li
-                                key={block.chunkId}
-                                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800"
-                                title={block.text}
-                              >
-                                <span className="font-semibold text-slate-600">
-                                  Page {block.pageNumber}
-                                  <span className="ml-2 font-mono text-slate-500">
-                                    {(block.similarity * 100).toFixed(1)}% match
-                                  </span>
-                                </span>
-                                <p className="mt-1">{shortPreview(block.text, 20)}</p>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : item.evidence ? (
-                          <p className="text-xs leading-relaxed text-slate-700" title={item.evidence}>
-                            {shortPreview(item.evidence, 20)}
-                          </p>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
+                      <td className="px-4 py-3">
+                        <EvidenceColumn item={item} />
                       </td>
-                      <td className="px-6 py-4 align-top">
-                        <ReasonColumn item={item} />
-                      </td>
-                      <td className="px-6 py-4 align-top text-right text-slate-400">
-                        <span className="material-symbols-outlined">more_horiz</span>
+                      <td className="px-4 py-3">
+                        <ReasonColumn item={item} layout="table" />
                       </td>
                     </tr>
                   ))}
@@ -175,17 +185,169 @@ export function ResultsPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <p className="text-sm text-slate-500">
               Showing {filteredItems.length} of {data.items.length} checklist items
             </p>
-            <Link to="/" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90">
+            <Link
+              to="/"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white hover:bg-primary/90 sm:w-auto"
+            >
               New Analysis
             </Link>
           </div>
         </div>
       )}
     </AppShell>
+  );
+}
+
+function ResultItemMobileCard({ item }: { item: ChecklistItem }) {
+  return (
+    <article className="space-y-4 px-4 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <span className="inline-block max-w-full break-all rounded-md bg-slate-100 px-2 py-1 font-mono text-[11px] font-bold text-slate-700">
+            {item.id}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={item.status} />
+            {item.needsReview ? (
+              <span
+                className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800"
+                title="Low confidence, missing evidence, or partial satisfaction — confirm manually."
+              >
+                Review
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="shrink-0 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
+          <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Best retrieval</p>
+          <BestMatchColumn item={item} align="start" />
+        </div>
+      </div>
+
+      <section className="space-y-1">
+        <h3 className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Requirement</h3>
+        <p className="text-sm font-medium leading-relaxed text-slate-800">{item.requirement}</p>
+      </section>
+
+      <section className="space-y-1">
+        <h3 className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Evidence</h3>
+        <EvidenceColumn item={item} />
+      </section>
+
+      <section className="space-y-1">
+        <h3 className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Summary</h3>
+        <ReasonColumn item={item} layout="stack" />
+      </section>
+    </article>
+  );
+}
+
+function BestMatchColumn({ item, align = "center" }: { item: ChecklistItem; align?: "center" | "start" }) {
+  const sim = item.bestSimilarity;
+  const cov = item.coverage;
+  const alignCls = align === "start" ? "text-left" : "text-center";
+
+  if (sim == null || sim <= 0) {
+    return (
+      <div className={alignCls}>
+        <span className="text-lg font-semibold tabular-nums text-slate-300">—</span>
+        <p className="mt-0.5 text-[10px] leading-tight text-slate-400">No match</p>
+      </div>
+    );
+  }
+
+  const pct = Math.round(sim * 1000) / 10;
+  const tone =
+    pct >= 75 ? "text-emerald-700" : pct >= 50 ? "text-amber-700" : "text-slate-700";
+
+  return (
+    <div
+      className={alignCls}
+      title="Highest cosine similarity between this checklist rule and any retrieved document chunk (0–100%)."
+    >
+      <span className={`text-xl font-bold tabular-nums ${tone}`}>{pct}%</span>
+      {cov != null && Number.isFinite(cov) ? (
+        <p className="mt-1 text-[10px] font-medium leading-tight text-slate-500">
+          Coverage {Math.round(cov * 100)}%
+        </p>
+      ) : (
+        <p className="mt-1 text-[10px] text-slate-400">Row score</p>
+      )}
+    </div>
+  );
+}
+
+function EvidenceColumn({ item }: { item: ChecklistItem }) {
+  if (item.status === "missing") {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">
+        No document text matched this rule strongly enough to show here.
+      </div>
+    );
+  }
+
+  if (item.evidenceBlocks && item.evidenceBlocks.length > 0) {
+    const blocks = [...item.evidenceBlocks].sort((a, b) => b.similarity - a.similarity);
+    return (
+      <ul className="space-y-2">
+        {blocks.map((block, index) => (
+          <EvidenceBlockCard key={`${block.chunkId}-${index}`} block={block} rank={index + 1} />
+        ))}
+      </ul>
+    );
+  }
+
+  if (item.evidence?.trim()) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Snippet</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-700">{shortPreview(item.evidence, EVIDENCE_PREVIEW_CHARS)}</p>
+      </div>
+    );
+  }
+
+  return <span className="text-xs text-slate-400">—</span>;
+}
+
+function EvidenceBlockCard({ block, rank }: { block: EvidenceBlock; rank: number }) {
+  const pct = Math.round(block.similarity * 1000) / 10;
+  const tone =
+    pct >= 75 ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : pct >= 50 ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-slate-100 text-slate-800 ring-slate-200";
+  const body = (block.text ?? "").trim();
+  const showExpand = body.length > EVIDENCE_PREVIEW_CHARS;
+
+  return (
+    <li className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/90 px-2.5 py-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-500">#{rank}</span>
+          <span className="text-xs font-semibold text-slate-700">Page {block.pageNumber}</span>
+        </div>
+        <span
+          className={`rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ring-1 ${tone}`}
+          title="Cosine similarity for this chunk vs the rule embedding (same scale as Best retrieval)."
+        >
+          {pct}% match
+        </span>
+      </div>
+      <div className="px-2.5 py-2">
+        <p className="line-clamp-4 text-xs leading-relaxed text-slate-700" title={body}>
+          {shortPreview(body, EVIDENCE_PREVIEW_CHARS)}
+        </p>
+        {showExpand ? (
+          <details className="mt-1.5">
+            <summary className="cursor-pointer text-[11px] font-semibold text-primary">Show full excerpt</summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-slate-100 bg-slate-50 p-2 text-[11px] leading-relaxed text-slate-700">
+              {body}
+            </pre>
+          </details>
+        ) : null}
+      </div>
+    </li>
   );
 }
 
@@ -205,10 +367,10 @@ function shortPreview(text: string | null | undefined, maxChars: number): string
   const value = (text ?? "").replace(/\s+/g, " ").trim();
   if (!value) return "—";
   if (value.length <= maxChars) return value;
-  return `${value.slice(0, maxChars)}...`;
+  return `${value.slice(0, maxChars)}…`;
 }
 
-function ReasonColumn({ item }: { item: ChecklistItem }) {
+function ReasonColumn({ item, layout = "stack" }: { item: ChecklistItem; layout?: "table" | "stack" }) {
   const checks = item.checkResults ?? [];
   const explain = item.explanation?.trim();
   const hasChecks = checks.length > 0;
@@ -218,31 +380,32 @@ function ReasonColumn({ item }: { item: ChecklistItem }) {
   }
 
   const showFallback = !explain && !hasChecks && item.status !== "missing";
+  const scrollCls = layout === "table" ? "max-h-[14rem] overflow-y-auto pr-1" : "";
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col gap-2 ${scrollCls}`}>
       {explain ? (
-        <p className="rounded-lg border border-primary/20 bg-primary/5 p-2 text-xs font-medium leading-relaxed text-slate-700">
+        <p className="rounded-lg border border-slate-200 bg-slate-50/90 p-2.5 text-xs font-medium leading-relaxed text-slate-700">
           {explain}
         </p>
       ) : null}
       {hasChecks ? (
         <details className={explain ? "border-t border-slate-100 pt-2" : ""}>
-          <summary className="cursor-pointer text-xs font-medium text-slate-500">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-slate-900">
             {checks.length} atomic check{checks.length === 1 ? "" : "s"}
           </summary>
-          <ul className="mt-2 space-y-2 text-left">
+          <ul className="mt-2 space-y-2">
             {checks.map((c) => (
               <li
                 key={c.checkId}
-                className="rounded-lg border border-slate-200 bg-slate-50/80 p-2 text-xs text-slate-700"
+                className="rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700 shadow-sm"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-slate-800">{shortPreview(c.label, 42)}</span>
+                  <span className="font-semibold text-slate-800">{shortPreview(c.label, 48)}</span>
                   <AtomicStatusChip status={c.status} />
                   {c.confidence != null && Number.isFinite(c.confidence) ? (
-                    <span className="font-mono text-[10px] text-slate-500">
-                      {Math.round(c.confidence * 100)}%
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+                      {Math.round(c.confidence * 100)}% conf.
                     </span>
                   ) : null}
                 </div>
@@ -277,7 +440,7 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-4 py-1.5 text-sm font-semibold transition ${
+      className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-semibold transition sm:px-4 ${
         active ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-100"
       }`}
     >
